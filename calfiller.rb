@@ -2,7 +2,7 @@ require 'open-uri'
 require 'rss'
 require 'rexml/document'
 
-syoboUrl = "http://cal.syoboi.jp/rss2.php?usr="+ARGV[0].to_s+"&filter=0&count=10&ssch=1&days=1&titlefmt=%24(TID)%7c%5f%7c%24(PID)%7c%5f%7c%24(Count)%7c%5f%7c%24(Title)"
+syoboUrl = "http://cal.syoboi.jp/rss2.php?usr="+ARGV[0].to_s+"&filter=0&count=150&ssch=1&days=1&titlefmt=%24(TID)%7c%5f%7c%24(PID)%7c%5f%7c%24(Count)%7c%5f%7c%24(Title)%7c%5f%7c%24(SubTitleB)"
 
 titleInfoUrlString = "http://cal.syoboi.jp/db.php?Command=TitleLookup&TID=*&LastUpdate=%d_000000-%d_000000&Fields=TID,Title"
 
@@ -34,56 +34,71 @@ end
 
 # タイトルの解析
 def parseTitle(titleString)
+=begin
 	tid = titleString[/([0-9]+)\|\_\|([0-9]+)/, 1]
 	pid = titleString[/([0-9]+)\|\_\|([0-9]+)/, 2]
 	count = titleString[/([0-9]+)\|\_\|([0-9]+)\|\_\|([0-9]+)/, 3]
 	dirtyProgramName = titleString[/([\S\s]+)\|\_\|([\S\s]+)\|\_\|([\S\s]+)\|\_\|([\S\s]+)/, 4]
-	# puts dirtyProgramName
-	puts titleString
-	# syobocalからtidが見つからなかった場合
-	if tid == nil
+	subtitleB = titleString[/([\S\s]+)\|\_\|([\S\s]+)\|\_\|([\S\s]+)\|\_\|([\S\s]+)\|\_\|([\S\s]+)/, 5]
+=end
+	tid = titleString[/([0-9]+|)\|\_\|([0-9]+|)\|\_\|([0-9]+|)\|\_\|([\S\s]+|)\|\_\|([\S\s]+|)/, 1]
+	pid = titleString[/([0-9]+|)\|\_\|([0-9]+|)\|\_\|([0-9]+|)\|\_\|([\S\s]+|)\|\_\|([\S\s]+|)/, 2]
+	count = titleString[/([0-9]+|)\|\_\|([0-9]+|)\|\_\|([0-9]+|)\|\_\|([\S\s]+|)\|\_\|([\S\s]+|)/, 3]
+	dirtyProgramName = titleString[/([0-9]+|)\|\_\|([0-9]+|)\|\_\|([0-9]+|)\|\_\|([\S\s]+|)\|\_\|([\S\s]+|)/, 4]
+	subtitleB = titleString[/([0-9]+|)\|\_\|([0-9]+|)\|\_\|([0-9]+|)\|\_\|([\S\s]+|)\|\_\|([\S\s]+|)/, 5]
+	#puts titleString
+	#print(tid, ",", pid, ",", count, ",", dirtyProgramName, ",", subtitleB, "\n")
+
+	if tid != "" and pid != 0 and count != ""
+		programName = dirtyProgramName.rstrip
+	end
+
+	# sybocalに登録されているが複数話放送の可能性。
+	if tid != "" and pid != 0 and count == ""
 		# とりあえず一枠一話のみ対応
-		dirtyProgramName = titleString[/[^(\|\_\|0\|\_\|\|\_\|)].*/]
-		count = dirtyProgramName[/^.*\#([0-9]+)/, 1]
-		programName = dirtyProgramName[/(^.*)\#[0-9]+/, 1]
+		count = subtitleB[/\#([0-9]+)/, 1]
+		programName = dirtyProgramName[/(.*?)\#[0-9]+/, 1].to_s.rstrip
 		if programName == nil
-			programName = dirtyProgramName
-		end
-	else 
-		if pid == 0
-			# とりあえず一枠一話のみ対応
-			dirtyProgramName = titleString[/[^(0-9\|\_\|0\|\_\|\|\_\|)].*/]
-			count = dirtyProgramName[/^.*\#([0-9]+)/, 1]
-			programName = dirtyProgramName[/(^.*)\#[0-9]+/, 1]
-			if programName == nil
-				programName = dirtyProgramName
-			end
-		else
-			programName = dirtyProgramName
+			programName = dirtyProgramName.rstrip
 		end
 	end
+
+	# syobocalに登録されているが映画など話数の無い作品
+	if tid != "" and pid == 0
+		# とりあえず一枠一話のみ対応
+		#counts = dirtyProgramName.split(/.*?\#([0-9]+)/)
+		count = dirtyProgramName[/\#([0-9]+)/, 1]
+		programName = dirtyProgramName[/(.*?)\#[0-9]+/, 1].to_s.rstrip
+		if programName == nil
+			programName = dirtyProgramName.rstrip
+		end
+	end
+	# syobocalからtidが見つからなかった場合
+	if tid == ""
+		# とりあえず一枠一話のみ対応
+		#counts = dirtyProgramName.split(/.*?\#([0-9]+)/)
+		count = dirtyProgramName[/\#([0-9]+)/, 1]
+		programName = dirtyProgramName[/(.*?)\#[0-9]+/, 1].to_s.rstrip
+		if programName == nil
+			programName = dirtyProgramName.rstrip
+		end
+	end
+
+	# syobocalに無いわ映画だわ
 	if count == nil
 		count = 0
 	end
-	
-	print(tid, ",", pid, ",", count, ",", programName, "\n")
+	#print(tid, ",", pid, ",", count, ",", programName, "\n")
 	
 	return tid, pid, count, programName
 end
 
-=begin
- todo 有効な番組情報をキャッシュで持つ(番組名, TID, 話数, epID)
- キャッシュファイルの取得
- 取得した要素のうち、TIDが0であればキャッシュから番組情報を取得
- なければ出力対象から外す
-
- やはり番組情報をDB上で管理したほうが良さそう
- 	* TID
- 	* syobocal番組名
- 	* syobocalサブタイトルID
- 	* syobocalサブタイトル
-	* 話数
-=end
+def isValidEpisode(elem)
+	if elem.attributes.get_attribute("TID") != nil and elem.attributes.get_attribute("PID") != nil and elem.attributes.get_attribute("TITLE") != nil and elem.attributes.get_attribute("COUNT") != nil
+		return true
+	end
+	return false
+end
 
 def findEpisode(elems, tid, pid)
 	elems.each {|elem|
@@ -104,17 +119,35 @@ def findProgramNameFromTid(elems, tid, pid)
 		if elem.attributes.get_attribute("TID").value == tid
 		#	puts elem.text
 		#	print("True\n")
-			return elem.text
+			return elem.attributes.get_attribute("TITLE").value
 		end
 	}
 	#print("False\n")
 	return nil
 end
 
+def findTidAndPid(elems, title, count)
+	elems.each {|elem|
+		if elem.attributes.get_attribute("TITLE").value == title and elem.attributes.get_attribute("COUNT").value == count
+			tid = elem.attributes.get_attribute("TID").value
+			pid = elem.attributes.get_attribute("PID").value
+			return tid, pid
+		end
+	}
+	return nil,nil
+end
+
 xmldoc = nil
 File.open(xmlFileName) do |syoboXML|
 	xmldoc = REXML::Document.new(syoboXML)
 end
+
+xmldoc.root.elements.each {|elem|
+	if isValidEpisode(elem) == false
+		xmldoc.root.delete_element(elem)
+	end
+}
+
 elems = xmldoc.root.elements
 attrs = xmldoc.root.attributes
 
@@ -123,16 +156,19 @@ syoboRss = getRss(syoboUrl)
 #puts syoboRss.to_s
 syoboRss.items.each do |item|
 	tid, pid, count, programName = parseTitle(item.title)
-	if tid == 0
-		item.link = "http://cal.syoboi.jp/tid/%s\#%s" % [tid, epNo]
+	if tid == ""
+		tid, pid = findTidAndPid(elems, programName, count)
+		if (tid != nil and pid != nil )
+			item.link = "http://cal.syoboi.jp/tid/%s\#%s" % [tid, pid]
+		end
 	else
 		# TIDをキーにDBに番組が登録されているかどうかを確認し、なければ追加する
 		if findEpisode(elems, tid, pid) == 0
 			addelem = REXML::Element.new("program")
 			addelem.add_attribute("TID", tid)
-			addelem.add_text(programName)
 			addelem.add_attribute("PID", pid)
-			addelem.add_text(count.to_s)
+			addelem.add_attribute("COUNT", count)
+			addelem.add_attribute("TITLE", programName)
 			elems.add(addelem)
 		end
 	end
@@ -141,6 +177,3 @@ end
 File.open(xmlFileName, "w") do |outfile|
 	xmldoc.write(outfile,0)
 end
-=begin
-
-=end
