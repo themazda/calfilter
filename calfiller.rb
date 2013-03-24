@@ -1,3 +1,5 @@
+#! /usr/bin/ruby
+
 require 'open-uri'
 require 'rss'
 require 'rexml/document'
@@ -8,6 +10,8 @@ titleInfoUrlString = "http://cal.syoboi.jp/db.php?Command=TitleLookup&TID=*&Last
 
 subTitleInfoUrlString = "http://cal.syoboi.jp/db.php?Command=ProgLookup&Range=%d_000000-%d_000000&JOIN=SubTitles&Fields=TID,"
 xmlFileName = "syobocal.xml"
+
+puts "Content-type: text/xml\n\n"
 
 def getRss(url)
 	return open(url){|file| RSS::Parser.parse(file.read, false)}
@@ -173,7 +177,7 @@ syoboRss.items.each do |item|
 		end
 	end
 end
-#puts syoboRss.to_s
+puts syoboRss.to_s
 File.open(xmlFileName, "w") do |outfile|
 	xmldoc.write(outfile,0)
 end
